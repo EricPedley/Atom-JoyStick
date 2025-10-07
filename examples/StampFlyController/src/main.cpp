@@ -151,10 +151,10 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *recv_data, int data_len)
             memcpy((uint8_t *)&roll_rate, &recv_data[2+4*4], 4);
             memcpy((uint8_t *)&pitch_rate, &recv_data[2+4*5], 4);
             memcpy((uint8_t *)&yaw_rate, &recv_data[2+4*6], 4);
-            memcpy((uint8_t *)&frontRight_motor_duty, &recv_data[2+4*7], 1);
-            memcpy((uint8_t *)&frontLeft_motor_duty, &recv_data[2+4*8], 1);
-            memcpy((uint8_t *)&rearRight_motor_duty, &recv_data[2+4*9], 1);
-            memcpy((uint8_t *)&rearLeft_motor_duty, &recv_data[2+4*10], 1);
+            memcpy((uint8_t *)&frontRight_motor_duty, &recv_data[2+4*7], 4);
+            memcpy((uint8_t *)&frontLeft_motor_duty, &recv_data[2+4*8], 4);
+            memcpy((uint8_t *)&rearRight_motor_duty, &recv_data[2+4*9], 4);
+            memcpy((uint8_t *)&rearLeft_motor_duty, &recv_data[2+4*10], 4);
             USBSerial.printf("%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
                              elapsedTime, accelX, accelY, accelZ, roll_rate, pitch_rate, yaw_rate,
                              frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty);
