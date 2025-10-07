@@ -126,21 +126,38 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *recv_data, int data_len)
             USBSerial.printf("Receive !\n");
         }
     } else {
+        float elapsedTime = 0;
+        float intervalTime = 0;
+
         if (recv_data[0] == 88 && recv_data[1] == 88) {
-            memcpy((uint8_t *)&roll_angle, &recv_data[2 + 4 * (3 - 1)], 4);
-            memcpy((uint8_t *)&pitch_angle, &recv_data[2 + 4 * (4 - 1)], 4);
-            memcpy((uint8_t *)&yaw_angle, &recv_data[2 + 4 * (5 - 1)], 4);
-            memcpy((uint8_t *)&fly_bat_voltage, &recv_data[2 + 4 * (15 - 1)], 4);
-            memcpy((uint8_t *)&altitude, &recv_data[2 + 4 * (25 - 1)], 4);
-            alt_flag = recv_data[2 + 4 * (28 - 1)];
-            fly_mode = recv_data[2 + 4 * (28 - 1) + 1];
-            memcpy((uint8_t *)&tof_front, &recv_data[2 + 4 * (28 - 1) + 2], 2);
-            is_fly_flag = 1;
-            if (fly_mode == PARKING_MODE) {
-                fly_status_manual = 0;
-            }
-            // USBSerial.printf("roll:%.2f, pitch:%.2f, yaw:%.2f, voltage:%.2f, alt_flag:%d, fly_mode:%d,
-            // tof_front:%d\r\n", roll_angle, pitch_angle, yaw_angle, fly_bat_voltage, alt_flag, fly_mode, tof_front);
+    // data_set(senddata, Elapsed_time, &index);  // 1 Time
+    // data_set(senddata, Accel_x, &index);                       // 16 Accel_x_raw
+    // data_set(senddata, Accel_y, &index);                       // 17 Accel_y_raw
+    // data_set(senddata, Accel_z, &index);                       // 18 Accel_z_raw
+    // data_set(senddata, Roll_rate, &index);                       // 16 Accel_x
+    // data_set(senddata, Pitch_rate, &index);                       // 17 Accel_y
+    // data_set(senddata, Yaw_rate, &index);                       // 18 Accel_z
+    // data_set(senddata, FrontRight_motor_duty, &index);
+    // data_set(senddata, FrontLeft_motor_duty, &index);  // 21 FrontLeft_motor_duty
+    // data_set(senddata, RearRight_motor_duty, &index);  // 22 RearRight_motor_duty
+    // data_set(senddata, RearLeft_motor_duty, &index);
+            float accelX, accelY, accelZ;
+            float roll_rate, pitch_rate, yaw_rate;
+            uint8_t frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty;
+            memcpy((uint8_t *)&elapsedTime, &recv_data[2+4*0], 4);
+            memcpy((uint8_t *)&accelX, &recv_data[2+4*1], 4);
+            memcpy((uint8_t *)&accelY, &recv_data[2+4*2], 4);
+            memcpy((uint8_t *)&accelZ, &recv_data[2+4*3], 4);
+            memcpy((uint8_t *)&roll_rate, &recv_data[2+4*4], 4);
+            memcpy((uint8_t *)&pitch_rate, &recv_data[2+4*5], 4);
+            memcpy((uint8_t *)&yaw_rate, &recv_data[2+4*6], 4);
+            memcpy((uint8_t *)&frontRight_motor_duty, &recv_data[2+4*7], 1);
+            memcpy((uint8_t *)&frontLeft_motor_duty, &recv_data[2+4*8], 1);
+            memcpy((uint8_t *)&rearRight_motor_duty, &recv_data[2+4*9], 1);
+            memcpy((uint8_t *)&rearLeft_motor_duty, &recv_data[2+4*10], 1);
+            USBSerial.printf("%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+                             elapsedTime, accelX, accelY, accelZ, roll_rate, pitch_rate, yaw_rate,
+                             frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty);
         }
     }
 }
@@ -148,7 +165,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *recv_data, int data_len)
 #define BUF_SIZE 128
 // EEPROMにデータを保存する
 void save_data(void) {
-    if (!SPIFFS.begin()) {
+    if (!SPIFFS.begin()) { 
         // 初始化失败时处理
         USBSerial.println("SPIFFS-An error occurred while mounting SPIFFS");
 
