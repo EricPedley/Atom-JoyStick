@@ -143,7 +143,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *recv_data, int data_len)
     // data_set(senddata, RearLeft_motor_duty, &index);
             float accelX, accelY, accelZ;
             float roll_rate, pitch_rate, yaw_rate;
-            uint8_t frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty;
+            float frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty;
             memcpy((uint8_t *)&elapsedTime, &recv_data[2+4*0], 4);
             memcpy((uint8_t *)&accelX, &recv_data[2+4*1], 4);
             memcpy((uint8_t *)&accelY, &recv_data[2+4*2], 4);
