@@ -68,6 +68,7 @@ void update_pitch_and_roll(lv_obj_t *ui_img_pitch_scale, lv_obj_t *ui_img_roll_s
 LV_IMG_DECLARE(_StableMode_alpha_64x75);
 LV_IMG_DECLARE(_Alt_Manual_alpha_64x75);
 LV_IMG_DECLARE(_SportMode_alpha_64x75);
+LV_IMG_DECLARE(cyclone_64_75);
 LV_IMG_DECLARE(_AutoMode_alpha_64x75);
 LV_IMG_DECLARE(_Dial_bg_alpha_60x60);
 LV_IMG_DECLARE(_Pitch_Scale_alpha_60x60);

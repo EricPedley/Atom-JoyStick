@@ -860,7 +860,9 @@ void screen_timer_cb(lv_timer_t *t) {
         beep();
         if (Mode == ANGLECONTROL)
             Mode = RATECONTROL;
-        else
+        else if(Mode == RATECONTROL)
+            Mode = NN_CONTROL;
+        else if(Mode == NN_CONTROL)
             Mode = ANGLECONTROL;
     }
 
@@ -898,6 +900,9 @@ void screen_timer_cb(lv_timer_t *t) {
     } else if (Mode == RATECONTROL) {
         lv_img_set_src(guider_ui.screen_img_1, &_SportMode_alpha_64x75);
         lv_obj_set_style_bg_color(guider_ui.screen_cont_2, lv_color_hex(0xfcd741), LV_PART_MAIN | LV_STATE_DEFAULT);
+    } else if(Mode == NN_CONTROL) {
+        lv_img_set_src(guider_ui.screen_img_1, &cyclone_64_75);
+        lv_obj_set_style_bg_color(guider_ui.screen_cont_2, lv_color_hex(0x0000FF), LV_PART_MAIN | LV_STATE_DEFAULT);
     }
 
     // if (peerInfo.peer_addr[4] == 0xFF && peerInfo.peer_addr[5] == 0xFF) {
