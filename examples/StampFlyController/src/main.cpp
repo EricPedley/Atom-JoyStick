@@ -157,6 +157,7 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *recv_data, int data_len)
             memcpy((uint8_t *)&frontLeft_motor_duty, &recv_data[2+4*8], 4);
             memcpy((uint8_t *)&rearRight_motor_duty, &recv_data[2+4*9], 4);
             memcpy((uint8_t *)&rearLeft_motor_duty, &recv_data[2+4*10], 4);
+            memcpy((uint8_t *)&fly_bat_voltage, &recv_data[2+4*11], 4);
             // for each byte print as hex
             for (int i = 2; i < 46; i++) {
                 toPrint[(i-2)*2]     = "0123456789ABCDEF"[(recv_data[i] >> 4) & 0x0F];
