@@ -129,6 +129,8 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *recv_data, int data_len)
         float elapsedTime = 0;
         float intervalTime = 0;
 
+        char toPrint[89];
+        toPrint[88] = '\0'; // Null-terminate the string
         if (recv_data[0] == 88 && recv_data[1] == 88) {
     // data_set(senddata, Elapsed_time, &index);  // 1 Time
     // data_set(senddata, Accel_x, &index);                       // 16 Accel_x_raw
@@ -155,9 +157,15 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *recv_data, int data_len)
             memcpy((uint8_t *)&frontLeft_motor_duty, &recv_data[2+4*8], 4);
             memcpy((uint8_t *)&rearRight_motor_duty, &recv_data[2+4*9], 4);
             memcpy((uint8_t *)&rearLeft_motor_duty, &recv_data[2+4*10], 4);
-            USBSerial.printf("%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
-                             elapsedTime, accelX, accelY, accelZ, roll_rate, pitch_rate, yaw_rate,
-                             frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty);
+            // for each byte print as hex
+            for (int i = 2; i < 46; i++) {
+                toPrint[(i-2)*2]     = "0123456789ABCDEF"[(recv_data[i] >> 4) & 0x0F];
+                toPrint[(i-2)*2 + 1] = "0123456789ABCDEF"[recv_data[i] & 0x0F];
+            }
+            USBSerial.printf("%s\n", toPrint);
+            // USBSerial.printf("%f,%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n",
+            //                  elapsedTime, accelX, accelY, accelZ, roll_rate, pitch_rate, yaw_rate,
+            //                  frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty);
         }
     }
 }

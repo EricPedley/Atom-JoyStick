@@ -5,11 +5,7 @@ import datetime
 import os
 import sys
 from pathlib import Path
-
-# Data format from the device:
-# USBSerial.printf("%.6f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%d,%d,%d,%d\n",
-#                  elapsedTime, accelX, accelY, accelZ, roll_rate, pitch_rate, yaw_rate,
-#                  frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty);
+import struct
 
 # CSV column headers
 CSV_HEADERS = [
@@ -67,22 +63,23 @@ def read_and_save_data():
                             # Parse and write the data
                             try:
                                 # Split the comma-separated values
-                                values = line.split(',')
-                                if len(values) == 11:  # Expected number of values
+                                # values = line.split(',')
+                                if len(line) == 11*4*2:  # 11 floats, 4 bytes, 2 hex chars per byte
                                     # Convert to appropriate types
-                                    parsed_values = []
-                                    # First 7 values are floats
-                                    for i in range(7):
-                                        parsed_values.append(float(values[i]))
-                                    # Last 4 values are integers
-                                    for i in range(7, 11):
-                                        parsed_values.append(int(values[i]))
+                                    hex_vals = [line[i*8:(i+1)*8]for i in range(11)]
+                                    print(f"Hex values:")
+                                    for hv in hex_vals[-4:]:
+                                        print(f"  {hv}")
+                                    parsed_values = [
+                                        struct.unpack('f', bytes.fromhex(val))[0] for val in hex_vals
+                                    ]
+                                    print(f"Parsed values: {parsed_values}")
                                     
                                     # Write to CSV
                                     current_csv_writer.writerow(parsed_values)
                                     current_csv_file.flush()
                                 else:
-                                    print(f"Warning: Expected 11 values, got {len(values)}: {line}")
+                                    print(f"Warning: Expected 88 chars, got {len(line)}: {line}")
                             except (ValueError, IndexError) as e:
                                 print(f"Error parsing line '{line}': {e}")
                         
