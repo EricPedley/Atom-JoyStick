@@ -6,6 +6,21 @@ import os
 import sys
 from pathlib import Path
 import struct
+from erics_cameras.usb_cam import USBCam
+
+cam = USBCam(None, USBCam.ResolutionOption.R1080P, video_path="/dev/video0", framerate=30)
+import cv2
+
+while True:
+    frame = cam.take_image()
+    if frame is not None:
+        cv2.imshow("Camera", frame.get_array())
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+import rerun as rr
+
+rr.init('stampfly_logger', spawn=True)
 
 # CSV column headers
 CSV_HEADERS = [
@@ -59,7 +74,14 @@ def read_and_save_data():
                                 # Write headers
                                 current_csv_writer.writerow(CSV_HEADERS)
                                 current_csv_file.flush()
+                                dir = Path(filename.replace('.csv', '_images'))
+                                dir.mkdir(parents=True, exist_ok=True)
+                                cam.start_recording(dir)
+                                # rr.disconnect()
+                                # rr.init('stampfly_logger')
+                                # rr.save(filename.replace('.csv', '.rrd'))
                             
+
                             # Parse and write the data
                             try:
                                 # Split the comma-separated values
@@ -73,7 +95,10 @@ def read_and_save_data():
                                     parsed_values = [
                                         struct.unpack('f', bytes.fromhex(val))[0] for val in hex_vals
                                     ]
-                                    print(f"Parsed values: {parsed_values}")
+                                    rr.log('/stampfly/accel', rr.Scalars(parsed_values[1:4]))
+                                    rr.log('/stampfly/gyro', rr.Scalars(parsed_values[4:7]))
+                                    rr.log('/stampfly/motors', rr.Scalars(parsed_values[7:11]))
+
                                     
                                     # Write to CSV
                                     current_csv_writer.writerow(parsed_values)
@@ -87,6 +112,7 @@ def read_and_save_data():
                             # No data received within timeout
                             if current_csv_file is not None:
                                 print("No data received for 1 second, closing current CSV file")
+                                cam.stop_recording()
                                 current_csv_file.close()
                                 current_csv_file = None
                                 current_csv_writer = None
