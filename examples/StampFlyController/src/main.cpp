@@ -69,7 +69,7 @@ unsigned long stime, etime, dtime;
 byte axp_cnt = 0;
 
 char data[140];
-uint8_t senddata[44];
+uint8_t senddata[37];
 uint8_t disp_counter = 0;
 
 // Addiitional fields for mocap data sending
