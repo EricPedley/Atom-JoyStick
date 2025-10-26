@@ -25,7 +25,7 @@ extern M5GFX display;
 #define RATECONTROL_W_LOG    3
 #define ALT_CONTROL_MODE     4
 #define NOT_ALT_CONTROL_MODE 5
-#define NN_CONTROL 6
+#define NN_CONTROL 7
 #define RESO10BIT            (4096)
 
 #define INIT_MODE         0
