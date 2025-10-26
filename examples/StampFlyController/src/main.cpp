@@ -69,8 +69,17 @@ unsigned long stime, etime, dtime;
 byte axp_cnt = 0;
 
 char data[140];
-uint8_t senddata[25];  // 19->22->23->24->25
+uint8_t senddata[44];
 uint8_t disp_counter = 0;
+
+// Addiitional fields for mocap data sending
+char serialBuffer[64];
+int serialBufferPos = 0;
+static constexpr uint8_t MOCAP_DATA_LEN = 3 + (3 + 1 + 3) * 4 + 1 + 1 +3+ 1; // 3 bytes MAC + (position + yaw + linear_velocity) * 4 bytes + 1 byte arm_button + 3 bytes additional buttons/switches + 1 byte packet number + 1 byte checksum
+static_assert(MOCAP_DATA_LEN == 37); // 35 bytes + 1 byte checksum
+uint8_t mocap_data[MOCAP_DATA_LEN];
+volatile bool data_set = false;
+uint8_t packet_counter = 0;
 
 volatile uint8_t is_peering                   = 0;
 volatile uint8_t fly_status                   = 0;
@@ -516,12 +525,128 @@ uint8_t check_alt_mode_change(void) {
     return state;
 }
 
-void loop() {
-    uint16_t _throttle;  // = getThrottle();
-    uint16_t _phi;       // = getAileron();
-    uint16_t _theta;     // = getElevator();
-    uint16_t _psi;       // = getRudder();
+void send_manual_control(uint16_t _throttle, uint16_t _phi, uint16_t _theta, uint16_t _psi) {
+    // mass pro
+    // Throttle = (float)(_throttle - Throttle_bias)/(float)(RESO10BIT*0.5);
+    Throttle = -(float)(_throttle - Throttle_bias) / (float)(RESO10BIT * 0.5);
+    Phi      = (float)(_phi - Phi_bias) / (float)(RESO10BIT * 0.5);
+    // Theta = -(float)(_theta - Theta_bias)/(float)(RESO10BIT*0.5);
+    Theta = (float)(_theta - Theta_bias) / (float)(RESO10BIT * 0.5);
+    Psi   = (float)(_psi - Psi_bias) / (float)(RESO10BIT * 0.5);
 
+    uint8_t *d_int;
+
+    // ブロードキャストの混信を防止するためこの機体のMACアドレスに送られてきたものか判断する
+    senddata[0] = peerInfo.peer_addr[3];  ////////////////////////////
+    senddata[1] = peerInfo.peer_addr[4];  ////////////////////////////
+    senddata[2] = peerInfo.peer_addr[5];  ////////////////////////////
+
+    // TODO: send data relevant to position control: 10 bytes
+    // I cannot believe they didn't use structs
+    // needs to read from serial for position data: new challenge because telemetry was write-only on the serial line
+    // should check rl-tools implementation for an example of serial reading
+
+    d_int       = (uint8_t *)&Psi;
+    senddata[3] = d_int[0];
+    senddata[4] = d_int[1];
+    senddata[5] = d_int[2];
+    senddata[6] = d_int[3];
+
+    d_int        = (uint8_t *)&Throttle;
+    senddata[7]  = d_int[0];
+    senddata[8]  = d_int[1];
+    senddata[9]  = d_int[2];
+    senddata[10] = d_int[3];
+
+    d_int        = (uint8_t *)&Phi;
+    senddata[11] = d_int[0];
+    senddata[12] = d_int[1];
+    senddata[13] = d_int[2];
+    senddata[14] = d_int[3];
+
+    d_int        = (uint8_t *)&Theta;
+    senddata[15] = d_int[0];
+    senddata[16] = d_int[1];
+    senddata[17] = d_int[2];
+    senddata[18] = d_int[3];
+
+    // bump up indices to match data layout for mocap packets
+    senddata[31] = auto_up_down_status; // This is the arming button
+    senddata[32] = getFlipButton();
+    senddata[33] = Mode;
+    senddata[34] = AltMode;
+
+    senddata[35] = proactive_flag;
+
+    // checksum
+    senddata[36] = 0;
+    for (uint8_t i = 0; i < 36; i++) senddata[36] = senddata[36] + senddata[i];
+
+    // 送信
+    esp_err_t result = esp_now_send(peerInfo.peer_addr, senddata, sizeof(senddata));
+}
+
+void send_mocap() {
+    // Expects CSV floats from serial: rudder,throttle,aileron,elevator\n
+    if (USBSerial.available() > 0) {
+        char incomingChar = USBSerial.read();
+
+        if (incomingChar != '\n' && serialBufferPos < sizeof(serialBuffer) - 1) {
+            serialBuffer[serialBufferPos++] = incomingChar;
+        } else {
+            serialBuffer[serialBufferPos] = '\0';
+            serialBufferPos = 0;
+        }
+
+        float position[3] = {0, 0, 0}, yaw = 0, linear_velocity[3] = {0, 0, 0};
+
+        if (sscanf(serialBuffer, "%f,%f,%f,%f,%f,%f,%f", &position[0], &position[1], &position[2], &yaw, &linear_velocity[0], &linear_velocity[1], &linear_velocity[2]) == 8) {
+            // a) first 3 bytes: our own MAC[3], MAC[4], MAC[5]
+            mocap_data[0] = peerInfo.peer_addr[3];
+            mocap_data[1] = peerInfo.peer_addr[4];
+            mocap_data[2] = peerInfo.peer_addr[5];
+
+            memcpy(&mocap_data[3],  &position[0],   sizeof(float));
+            memcpy(&mocap_data[7],  &position[1], sizeof(float));
+            memcpy(&mocap_data[11], &position[2],  sizeof(float));
+            memcpy(&mocap_data[15], &yaw, sizeof(float));
+            memcpy(&mocap_data[19], &linear_velocity[0], sizeof(float));
+            memcpy(&mocap_data[23], &linear_velocity[1], sizeof(float));
+            memcpy(&mocap_data[27], &linear_velocity[2], sizeof(float));
+            mocap_data[31] = auto_up_down_status; // This is the arming button
+            mocap_data[32] = getFlipButton();
+            mocap_data[33] = Mode;
+            mocap_data[34] = AltMode;
+            mocap_data[35] = packet_counter;
+            packet_counter += 1;
+            // d) checksum over bytes 0..23
+            uint8_t sum = 0;
+            for (int i = 0; i < MOCAP_DATA_LEN-1; ++i) sum += mocap_data[i];
+            mocap_data[MOCAP_DATA_LEN - 1] = sum;
+
+            // --- 2) Send it ---
+            esp_err_t res = esp_now_send(peerInfo.peer_addr, mocap_data, sizeof(mocap_data));
+            if (res != ESP_OK) {
+                USBSerial.printf("Send failed: %d\n", res);
+            }
+            else{
+                USBSerial.printf("Sent: pos: %5.2f %5.2f %5.2f %5.2f %5.2f %5.2f %5.2f\n",
+                    position[0],
+                    position[1],
+                    position[2],
+                    yaw,
+                    linear_velocity[0],
+                    linear_velocity[1],
+                    linear_velocity[2]
+                );
+            }
+        } else {
+            USBSerial.println("Failed to parse CSV from serial. Expected: position[0], position[1], position[2], yaw, linear_velocity[0], linear_velocity[1], linear_velocity[2], arm_button\nGot: " + String(serialBuffer));
+        }
+    }
+}
+
+void loop() {
     if (page_nums == PAGE_SETUP)
     {  // 長期保管に適したバッテリー電圧になったとき通知音を鳴らす
         static bool prev_good_voltage[2];
@@ -569,10 +694,10 @@ void loop() {
         Timer_state = 0;
     }
 
-    _throttle = getThrottle();
-    _phi      = getAileron();
-    _theta    = getElevator();
-    _psi      = getRudder();
+    uint16_t _throttle = getThrottle();
+    uint16_t _phi      = getAileron();
+    uint16_t _theta    = getElevator();
+    uint16_t _psi      = getRudder();
 
     if (auto_up_down_status && (page_nums == PAGE_RUNNING)) {
         // Throttle_bias = _throttle;
@@ -581,58 +706,12 @@ void loop() {
         Psi_bias   = _psi;
     }
 
-    // mass pro
-    // Throttle = (float)(_throttle - Throttle_bias)/(float)(RESO10BIT*0.5);
-    Throttle = -(float)(_throttle - Throttle_bias) / (float)(RESO10BIT * 0.5);
-    Phi      = (float)(_phi - Phi_bias) / (float)(RESO10BIT * 0.5);
-    // Theta = -(float)(_theta - Theta_bias)/(float)(RESO10BIT*0.5);
-    Theta = (float)(_theta - Theta_bias) / (float)(RESO10BIT * 0.5);
-    Psi   = (float)(_psi - Psi_bias) / (float)(RESO10BIT * 0.5);
+    if(Mode == NN_CONTROL) {
+        send_mocap();
+    } else {
+        send_manual_control(_throttle, _phi, _theta, _psi);
+    }
 
-    uint8_t *d_int;
-
-    // ブロードキャストの混信を防止するためこの機体のMACアドレスに送られてきたものか判断する
-    senddata[0] = peerInfo.peer_addr[3];  ////////////////////////////
-    senddata[1] = peerInfo.peer_addr[4];  ////////////////////////////
-    senddata[2] = peerInfo.peer_addr[5];  ////////////////////////////
-
-    d_int       = (uint8_t *)&Psi;
-    senddata[3] = d_int[0];
-    senddata[4] = d_int[1];
-    senddata[5] = d_int[2];
-    senddata[6] = d_int[3];
-
-    d_int        = (uint8_t *)&Throttle;
-    senddata[7]  = d_int[0];
-    senddata[8]  = d_int[1];
-    senddata[9]  = d_int[2];
-    senddata[10] = d_int[3];
-
-    d_int        = (uint8_t *)&Phi;
-    senddata[11] = d_int[0];
-    senddata[12] = d_int[1];
-    senddata[13] = d_int[2];
-    senddata[14] = d_int[3];
-
-    d_int        = (uint8_t *)&Theta;
-    senddata[15] = d_int[0];
-    senddata[16] = d_int[1];
-    senddata[17] = d_int[2];
-    senddata[18] = d_int[3];
-
-    senddata[19] = auto_up_down_status;
-    senddata[20] = getFlipButton();
-    senddata[21] = Mode;
-    senddata[22] = AltMode;
-
-    senddata[23] = proactive_flag;
-
-    // checksum
-    senddata[24] = 0;
-    for (uint8_t i = 0; i < 24; i++) senddata[24] = senddata[24] + senddata[i];
-
-    // 送信
-    esp_err_t result = esp_now_send(peerInfo.peer_addr, senddata, sizeof(senddata));
 #ifdef DEBUG
     USBSerial.printf("%02X:%02X:%02X:%02X:%02X:%02X\n", peerInfo.peer_addr[0], peerInfo.peer_addr[1],
                      peerInfo.peer_addr[2], peerInfo.peer_addr[3], peerInfo.peer_addr[4], peerInfo.peer_addr[5]);
@@ -668,6 +747,7 @@ void loop() {
             is_fly_flag         = 0;
         }
     }
+
 }
 
 void show_battery_info() {

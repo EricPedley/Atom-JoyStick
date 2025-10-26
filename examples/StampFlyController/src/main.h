@@ -51,7 +51,7 @@ extern volatile uint32_t auto_up_down_status_counter;
 extern volatile uint8_t alt_flag;
 extern volatile uint8_t fly_mode;
 extern volatile uint8_t last_fly_mode;
-extern uint8_t senddata[25];
+extern uint8_t senddata[44];
 extern volatile int16_t tof_front;
 extern volatile uint8_t proactive_flag;
 extern volatile uint32_t proactive_flag_counter;
