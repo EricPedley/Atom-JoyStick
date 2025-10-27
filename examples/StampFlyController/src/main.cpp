@@ -69,15 +69,15 @@ unsigned long stime, etime, dtime;
 byte axp_cnt = 0;
 
 char data[140];
-uint8_t senddata[37];
 uint8_t disp_counter = 0;
 
 // Addiitional fields for mocap data sending
 char serialBuffer[64];
 int serialBufferPos = 0;
-static constexpr uint8_t MOCAP_DATA_LEN = 3 + (3 + 1 + 3) * 4 + 1 + 1 +3+ 1; // 3 bytes MAC + (position + yaw + linear_velocity) * 4 bytes + 1 byte arm_button + 3 bytes additional buttons/switches + 1 byte packet number + 1 byte checksum
-static_assert(MOCAP_DATA_LEN == 37); // 35 bytes + 1 byte checksum
+static constexpr uint8_t MOCAP_DATA_LEN = 3 + (3 + 1 + 3) * 4 +12+ 1 + 1 +3+ 1; // 3 bytes MAC + (position + yaw + linear_velocity) * 4 bytes + 1 byte arm_button + 3 bytes additional buttons/switches + 1 byte packet number + 1 byte checksum
+static_assert(MOCAP_DATA_LEN == 49); // 35 bytes + 1 byte checksum
 uint8_t mocap_data[MOCAP_DATA_LEN];
+uint8_t senddata[MOCAP_DATA_LEN];
 volatile bool data_set = false;
 uint8_t packet_counter = 0;
 
@@ -141,17 +141,6 @@ void OnDataRecv(const uint8_t *mac_addr, const uint8_t *recv_data, int data_len)
         char toPrint[89];
         toPrint[88] = '\0'; // Null-terminate the string
         if (recv_data[0] == 88 && recv_data[1] == 88) {
-    // data_set(senddata, Elapsed_time, &index);  // 1 Time
-    // data_set(senddata, Accel_x, &index);                       // 16 Accel_x_raw
-    // data_set(senddata, Accel_y, &index);                       // 17 Accel_y_raw
-    // data_set(senddata, Accel_z, &index);                       // 18 Accel_z_raw
-    // data_set(senddata, Roll_rate, &index);                       // 16 Accel_x
-    // data_set(senddata, Pitch_rate, &index);                       // 17 Accel_y
-    // data_set(senddata, Yaw_rate, &index);                       // 18 Accel_z
-    // data_set(senddata, FrontRight_motor_duty, &index);
-    // data_set(senddata, FrontLeft_motor_duty, &index);  // 21 FrontLeft_motor_duty
-    // data_set(senddata, RearRight_motor_duty, &index);  // 22 RearRight_motor_duty
-    // data_set(senddata, RearLeft_motor_duty, &index);
             float accelX, accelY, accelZ;
             float roll_rate, pitch_rate, yaw_rate;
             float frontRight_motor_duty, frontLeft_motor_duty, rearRight_motor_duty, rearLeft_motor_duty;
@@ -571,16 +560,17 @@ void send_manual_control(uint16_t _throttle, uint16_t _phi, uint16_t _theta, uin
     senddata[18] = d_int[3];
 
     // bump up indices to match data layout for mocap packets
-    senddata[31] = auto_up_down_status; // This is the arming button
-    senddata[32] = getFlipButton();
-    senddata[33] = Mode;
-    senddata[34] = AltMode;
+    senddata[43] = auto_up_down_status; // This is the arming button
+    senddata[44] = getFlipButton();
+    senddata[45] = Mode;
+    senddata[46] = AltMode;
 
-    senddata[35] = proactive_flag;
+    senddata[47] = proactive_flag;
 
     // checksum
-    senddata[36] = 0;
-    for (uint8_t i = 0; i < 36; i++) senddata[36] = senddata[36] + senddata[i];
+    int lastIndex = 48;
+    senddata[lastIndex] = 0;
+    for (uint8_t i = 0; i < 36; i++) senddata[lastIndex] = senddata[lastIndex] + senddata[i];
 
     // 送信
     esp_err_t result = esp_now_send(peerInfo.peer_addr, senddata, sizeof(senddata));
@@ -600,7 +590,9 @@ void send_mocap() {
 
         float position[3] = {0, 0, 0}, yaw = 0, linear_velocity[3] = {0, 0, 0};
 
-        if (sscanf(serialBuffer, "%f,%f,%f,%f,%f,%f,%f", &position[0], &position[1], &position[2], &yaw, &linear_velocity[0], &linear_velocity[1], &linear_velocity[2]) == 8) {
+        float positionSetpoint[3] = {0, 0, 0};
+
+        if (sscanf(serialBuffer, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f", &position[0], &position[1], &position[2], &yaw, &linear_velocity[0], &linear_velocity[1], &linear_velocity[2], &positionSetpoint[0], &positionSetpoint[1], &positionSetpoint[2]) == 8) {
             // a) first 3 bytes: our own MAC[3], MAC[4], MAC[5]
             mocap_data[0] = peerInfo.peer_addr[3];
             mocap_data[1] = peerInfo.peer_addr[4];
@@ -613,11 +605,24 @@ void send_mocap() {
             memcpy(&mocap_data[19], &linear_velocity[0], sizeof(float));
             memcpy(&mocap_data[23], &linear_velocity[1], sizeof(float));
             memcpy(&mocap_data[27], &linear_velocity[2], sizeof(float));
-            mocap_data[31] = auto_up_down_status; // This is the arming button
-            mocap_data[32] = getFlipButton();
-            mocap_data[33] = Mode;
-            mocap_data[34] = AltMode;
-            mocap_data[35] = packet_counter;
+            float positionTarget[3];
+            if(positionSetpoint[2]<0) {
+                positionTarget[0] = position[0] + Theta;
+                positionTarget[1] = position[1] + Phi;
+                positionTarget[2] = position[2] + Throttle;
+            } else {
+                positionTarget[0] = positionSetpoint[0];
+                positionTarget[1] = positionSetpoint[1];
+                positionTarget[2] = positionSetpoint[2];
+            }
+            memcpy(&mocap_data[31], &positionTarget[0], sizeof(float));
+            memcpy(&mocap_data[35], &positionTarget[1], sizeof(float));
+            memcpy(&mocap_data[39], &positionTarget[2], sizeof(float));
+            mocap_data[43] = auto_up_down_status; // This is the arming button
+            mocap_data[44] = getFlipButton();
+            mocap_data[45] = Mode;
+            mocap_data[46] = AltMode;
+            mocap_data[47] = packet_counter;
             packet_counter += 1;
             // d) checksum over bytes 0..23
             uint8_t sum = 0;
