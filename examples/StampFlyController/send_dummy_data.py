@@ -63,12 +63,14 @@ def read_and_save_data():
                         yaw = 0
                         linear_velocity = [0,0,0]
                         positionSetpoint = [0,0,0]
-                        ser.write("%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n".format(
+                        to_send = "{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n".format(
                             position[0], position[1], position[2],
                             yaw,
                             linear_velocity[0], linear_velocity[1], linear_velocity[2],
                             positionSetpoint[0], positionSetpoint[1], positionSetpoint[2]
-                        ).encode('utf-8'))
+                        )
+                        print(f"Sending: {to_send.strip()}")
+                        ser.write(to_send.encode('utf-8'))
                         line = ser.readline().decode('utf-8').strip()
                         
                         if line:

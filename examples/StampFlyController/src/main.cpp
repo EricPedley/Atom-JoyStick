@@ -72,7 +72,7 @@ char data[140];
 uint8_t disp_counter = 0;
 
 // Addiitional fields for mocap data sending
-char serialBuffer[64];
+char serialBuffer[512];
 int serialBufferPos = 0;
 static constexpr uint8_t MOCAP_DATA_LEN = 3 + (3 + 1 + 3) * 4 +12+ 1 + 1 +3+ 1; // 3 bytes MAC + (position + yaw + linear_velocity) * 4 bytes + 1 byte arm_button + 3 bytes additional buttons/switches + 1 byte packet number + 1 byte checksum
 static_assert(MOCAP_DATA_LEN == 49); // 35 bytes + 1 byte checksum
@@ -592,7 +592,7 @@ void send_mocap() {
 
         float positionSetpoint[3] = {0, 0, 0};
 
-        if (sscanf(serialBuffer, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f", &position[0], &position[1], &position[2], &yaw, &linear_velocity[0], &linear_velocity[1], &linear_velocity[2], &positionSetpoint[0], &positionSetpoint[1], &positionSetpoint[2]) == 8) {
+        if (sscanf(serialBuffer, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f", &position[0], &position[1], &position[2], &yaw, &linear_velocity[0], &linear_velocity[1], &linear_velocity[2], &positionSetpoint[0], &positionSetpoint[1], &positionSetpoint[2]) == 10) {
             // a) first 3 bytes: our own MAC[3], MAC[4], MAC[5]
             mocap_data[0] = peerInfo.peer_addr[3];
             mocap_data[1] = peerInfo.peer_addr[4];
@@ -645,6 +645,9 @@ void send_mocap() {
                     linear_velocity[2]
                 );
             }
+            serialBufferPos = 0;
+            for(int i=0;i<sizeof(serialBuffer);++i)
+                serialBuffer[i] = '\0';
         } else {
             USBSerial.println("Failed to parse CSV from serial. Expected: position[0], position[1], position[2], yaw, linear_velocity[0], linear_velocity[1], linear_velocity[2], arm_button\nGot: " + String(serialBuffer));
         }
