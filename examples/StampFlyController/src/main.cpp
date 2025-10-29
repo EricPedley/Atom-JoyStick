@@ -578,21 +578,14 @@ void send_manual_control(uint16_t _throttle, uint16_t _phi, uint16_t _theta, uin
 
 void send_mocap() {
     // Expects CSV floats from serial: rudder,throttle,aileron,elevator\n
-    if (USBSerial.available() > 0) {
-        char incomingChar = USBSerial.read();
-
-        if (incomingChar != '\n' && serialBufferPos < sizeof(serialBuffer) - 1) {
-            serialBuffer[serialBufferPos++] = incomingChar;
-        } else {
-            serialBuffer[serialBufferPos] = '\0';
-            serialBufferPos = 0;
-        }
+    if (USBSerial.available() > 50) {
+        USBSerial.readBytesUntil('\n',serialBuffer, sizeof(serialBuffer));
 
         float position[3] = {0, 0, 0}, yaw = 0, linear_velocity[3] = {0, 0, 0};
 
         float positionSetpoint[3] = {0, 0, 0};
 
-        if (sscanf(serialBuffer, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f", &position[0], &position[1], &position[2], &yaw, &linear_velocity[0], &linear_velocity[1], &linear_velocity[2], &positionSetpoint[0], &positionSetpoint[1], &positionSetpoint[2]) == 10) {
+        if (sscanf(serialBuffer, "%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n", &position[0], &position[1], &position[2], &yaw, &linear_velocity[0], &linear_velocity[1], &linear_velocity[2], &positionSetpoint[0], &positionSetpoint[1], &positionSetpoint[2]) == 10) {
             // a) first 3 bytes: our own MAC[3], MAC[4], MAC[5]
             mocap_data[0] = peerInfo.peer_addr[3];
             mocap_data[1] = peerInfo.peer_addr[4];
@@ -646,10 +639,8 @@ void send_mocap() {
                 );
             }
             serialBufferPos = 0;
-            for(int i=0;i<sizeof(serialBuffer);++i)
-                serialBuffer[i] = '\0';
         } else {
-            USBSerial.println("Failed to parse CSV from serial. Expected: position[0], position[1], position[2], yaw, linear_velocity[0], linear_velocity[1], linear_velocity[2], arm_button\nGot: " + String(serialBuffer));
+            USBSerial.println("Failed to parse CSV from serial. Got: " + String(serialBuffer));
         }
     }
 }
