@@ -570,7 +570,7 @@ void send_manual_control(uint16_t _throttle, uint16_t _phi, uint16_t _theta, uin
     // checksum
     int lastIndex = 48;
     senddata[lastIndex] = 0;
-    for (uint8_t i = 0; i < 36; i++) senddata[lastIndex] = senddata[lastIndex] + senddata[i];
+    for (uint8_t i = 0; i < lastIndex; i++) senddata[lastIndex] = senddata[lastIndex] + senddata[i];
 
     // 送信
     esp_err_t result = esp_now_send(peerInfo.peer_addr, senddata, sizeof(senddata));
