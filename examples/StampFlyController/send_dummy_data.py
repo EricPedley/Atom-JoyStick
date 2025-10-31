@@ -1,15 +1,16 @@
 import serial
-import csv
 import time
 import datetime
-import os
 import sys
 from pathlib import Path
-import struct
-from erics_cameras.usb_cam import USBCam
+
+from pyvicon_datastream import tools
+import numpy as np
+
+VICON_TRACKER_IP = "192.168.30.153"
+OBJECT_NAME = "stampfly"
 
 # cam = USBCam(None, USBCam.ResolutionOption.R1080P, video_path="/dev/video0", framerate=30)
-import cv2
 
 # while True:
 #     frame = cam.take_image()
@@ -17,10 +18,6 @@ import cv2
 #         cv2.imshow("Camera", frame.get_array())
 #     if cv2.waitKey(1) & 0xFF == ord('q'):
 #         break
-
-import rerun as rr
-
-rr.init('stampfly_logger', spawn=True)
 
 # CSV column headers
 CSV_HEADERS = [
@@ -39,7 +36,7 @@ def create_timestamped_filename():
 
 def read_and_save_data():
     """Main function to read data from serial port and save to CSV files"""
-    serial_port = '/dev/ttyACM0'
+    serial_port = '/dev/ttyACM1'
     baud_rate = 115200  # Common baud rate, adjust if needed
     timeout = 1.0  # 1 second timeout
     
@@ -48,6 +45,8 @@ def read_and_save_data():
     
     current_csv_file = None
     current_csv_writer = None
+
+    mytracker = tools.ObjectTracker(VICON_TRACKER_IP)
     
     while True:
         try:
@@ -58,11 +57,18 @@ def read_and_save_data():
                 
                 while True:
                     try:
-                        # Read a line from serial port
-                        position = [0,0,0]
-                        yaw = 0
+                        position_data = mytracker.get_position(OBJECT_NAME)
+                        _, frame_no, objects = position_data
+                        if len(objects)>0:
+                            sixdof_pose = np.array(objects[0][2:])
+                            print(f"Position: {sixdof_pose}")
+                        else:
+                            print("No objects")
+                                            # Read a line from serial port
+                        position = sixdof_pose[:3]/1e3
+                        yaw = sixdof_pose[5]
                         linear_velocity = [0,0,0]
-                        positionSetpoint = [0,0,0]
+                        positionSetpoint = [-1.5, 2, 0.5]
                         to_send = "{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n".format(
                             position[0], position[1], position[2],
                             yaw,
@@ -74,51 +80,8 @@ def read_and_save_data():
                         line = ser.readline().decode('utf-8').strip()
                         
                         if line:
-                            # If we have a line of data
-                            print(f"Received: {line}")
-                            
-                            # If no CSV file is open, create a new one
-                            if current_csv_file is None:
-                                filename = create_timestamped_filename()
-                                print(f"Creating new CSV file: {filename}")
-                                current_csv_file = open(filename, 'w', newline='')
-                                current_csv_writer = csv.writer(current_csv_file)
-                                # Write headers
-                                current_csv_writer.writerow(CSV_HEADERS)
-                                current_csv_file.flush()
-                                dir = Path(filename.replace('.csv', '_images'))
-                                dir.mkdir(parents=True, exist_ok=True)
-                                # cam.start_recording(dir)
-                                # rr.disconnect()
-                                # rr.init('stampfly_logger')
-                                # rr.save(filename.replace('.csv', '.rrd'))
-                            
 
-                            # Parse and write the data
-                            try:
-                                # Split the comma-separated values
-                                # values = line.split(',')
-                                if len(line) == 11*4*2:  # 11 floats, 4 bytes, 2 hex chars per byte
-                                    # Convert to appropriate types
-                                    hex_vals = [line[i*8:(i+1)*8]for i in range(11)]
-                                    print(f"Hex values:")
-                                    for hv in hex_vals[-4:]:
-                                        print(f"  {hv}")
-                                    parsed_values = [
-                                        struct.unpack('f', bytes.fromhex(val))[0] for val in hex_vals
-                                    ]
-                                    rr.log('/stampfly/accel', rr.Scalars(parsed_values[1:4]))
-                                    rr.log('/stampfly/gyro', rr.Scalars(parsed_values[4:7]))
-                                    rr.log('/stampfly/motors', rr.Scalars(parsed_values[7:11]))
-
-                                    
-                                    # Write to CSV
-                                    current_csv_writer.writerow(parsed_values)
-                                    current_csv_file.flush()
-                                else:
-                                    print(f"Warning: Expected 88 chars, got {len(line)}: {line}")
-                            except (ValueError, IndexError) as e:
-                                print(f"Error parsing line '{line}': {e}")
+                            print(f"(Python) Received from ESP: {line}")
                         
                         else:
                             # No data received within timeout
