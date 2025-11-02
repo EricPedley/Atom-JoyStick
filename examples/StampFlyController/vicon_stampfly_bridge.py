@@ -4,7 +4,7 @@ import datetime
 import sys
 from pathlib import Path
 
-from pyvicon_datastream import tools
+# from pyvicon_datastream import tools
 import numpy as np
 
 VICON_TRACKER_IP = "192.168.30.153"
@@ -18,6 +18,11 @@ OBJECT_NAME = "stampfly"
 #         cv2.imshow("Camera", frame.get_array())
 #     if cv2.waitKey(1) & 0xFF == ord('q'):
 #         break
+
+import rerun as rr
+import struct
+
+rr.init('stampfly_logger', spawn=True)
 
 # CSV column headers
 CSV_HEADERS = [
@@ -36,7 +41,7 @@ def create_timestamped_filename():
 
 def read_and_save_data():
     """Main function to read data from serial port and save to CSV files"""
-    serial_port = '/dev/ttyACM1'
+    serial_port = '/dev/ttyACM0'
     baud_rate = 115200  # Common baud rate, adjust if needed
     timeout = 1.0  # 1 second timeout
     
@@ -46,7 +51,7 @@ def read_and_save_data():
     current_csv_file = None
     current_csv_writer = None
 
-    mytracker = tools.ObjectTracker(VICON_TRACKER_IP)
+    # mytracker = tools.ObjectTracker(VICON_TRACKER_IP)
     
     while True:
         try:
@@ -57,18 +62,31 @@ def read_and_save_data():
                 
                 while True:
                     try:
-                        position_data = mytracker.get_position(OBJECT_NAME)
-                        _, frame_no, objects = position_data
-                        if len(objects)>0:
-                            sixdof_pose = np.array(objects[0][2:])
-                            print(f"Position: {sixdof_pose}")
-                        else:
-                            print("No objects")
+
+                        if len(line) == 11*4*2:  # 11 floats, 4 bytes, 2 hex chars per byte
+                            # Convert to appropriate types
+                            hex_vals = [line[i*8:(i+1)*8]for i in range(11)]
+                            print(f"Hex values:")
+                            for hv in hex_vals[-4:]:
+                                print(f"  {hv}")
+                            parsed_values = [
+                                struct.unpack('f', bytes.fromhex(val))[0] for val in hex_vals
+                            ]
+                            rr.log('/stampfly/accel', rr.Scalars(parsed_values[1:4]))
+                            rr.log('/stampfly/gyro', rr.Scalars(parsed_values[4:7]))
+                            rr.log('/stampfly/motors', rr.Scalars(parsed_values[7:11]))
+                        # position_data = mytracker.get_position(OBJECT_NAME)
+                        # _, frame_no, objects = position_data
+                        # if len(objects)>0:
+                        #     sixdof_pose = np.array(objects[0][2:])
+                        #     print(f"Position: {sixdof_pose}")
+                        # else:
+                        #     print("No objects")
                                             # Read a line from serial port
-                        position = sixdof_pose[:3]/1e3
-                        yaw = sixdof_pose[5]
+                        position = [0,0,0]
+                        yaw = 0
                         linear_velocity = [0,0,0]
-                        positionSetpoint = [-1.5, 2, 0.5]
+                        positionSetpoint = [1, 0, 1]
                         to_send = "{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n".format(
                             position[0], position[1], position[2],
                             yaw,
