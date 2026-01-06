@@ -624,23 +624,24 @@ void send_mocap() {
 
             // --- 2) Send it ---
             esp_err_t res = esp_now_send(peerInfo.peer_addr, mocap_data, sizeof(mocap_data));
-            if (res != ESP_OK) {
-                USBSerial.printf("Send failed: %d\n", res);
-            }
-            else{
-                USBSerial.printf("Sent: pos: %5.2f %5.2f %5.2f %5.2f %5.2f %5.2f %5.2f\n",
-                    position[0],
-                    position[1],
-                    position[2],
-                    yaw,
-                    linear_velocity[0],
-                    linear_velocity[1],
-                    linear_velocity[2]
-                );
-            }
+            // if (res != ESP_OK) {
+            //     USBSerial.printf("Send failed: %d\n", res);
+            // }
+            // else{
+            //     USBSerial.printf("Sent: pos: %5.2f %5.2f %5.2f %5.2f %5.2f %5.2f %5.2f\n",
+            //         position[0],
+            //         position[1],
+            //         position[2],
+            //         yaw,
+            //         linear_velocity[0],
+            //         linear_velocity[1],
+            //         linear_velocity[2]
+            //     );
+            // }
             serialBufferPos = 0;
         } else {
-            USBSerial.println("Failed to parse CSV from serial. Got: " + String(serialBuffer));
+            // Fail silently because we need the USB line for telemetry
+            // USBSerial.println("Failed to parse CSV from serial. Got: " + String(serialBuffer));
         }
     }
 }

@@ -3,9 +3,18 @@ import time
 import datetime
 import sys
 from pathlib import Path
-
-# from pyvicon_datastream import tools
 import numpy as np
+
+# Feature flags
+USE_VICON = False
+USE_RERUN = True
+
+# Conditional imports
+if USE_VICON:
+    from pyvicon_datastream import tools
+
+if USE_RERUN:
+    import rerun as rr
 
 VICON_TRACKER_IP = "192.168.30.153"
 OBJECT_NAME = "stampfly"
@@ -19,10 +28,10 @@ OBJECT_NAME = "stampfly"
 #     if cv2.waitKey(1) & 0xFF == ord('q'):
 #         break
 
-import rerun as rr
 import struct
 
-rr.init('stampfly_logger', spawn=True)
+if USE_RERUN:
+    rr.init('stampfly_logger', spawn=True)
 
 # CSV column headers
 CSV_HEADERS = [
@@ -51,7 +60,8 @@ def read_and_save_data():
     current_csv_file = None
     current_csv_writer = None
 
-    # mytracker = tools.ObjectTracker(VICON_TRACKER_IP)
+    if USE_VICON:
+        mytracker = tools.ObjectTracker(VICON_TRACKER_IP)
     
     while True:
         try:
@@ -72,9 +82,10 @@ def read_and_save_data():
                             parsed_values = [
                                 struct.unpack('f', bytes.fromhex(val))[0] for val in hex_vals
                             ]
-                            rr.log('/stampfly/accel', rr.Scalars(parsed_values[1:4]))
-                            rr.log('/stampfly/gyro', rr.Scalars(parsed_values[4:7]))
-                            rr.log('/stampfly/motors', rr.Scalars(parsed_values[7:11]))
+                            if USE_RERUN:
+                                rr.log('/stampfly/accel', rr.Scalars(parsed_values[1:4]))
+                                rr.log('/stampfly/gyro', rr.Scalars(parsed_values[4:7]))
+                                rr.log('/stampfly/motors', rr.Scalars(parsed_values[7:11]))
                         # position_data = mytracker.get_position(OBJECT_NAME)
                         # _, frame_no, objects = position_data
                         # if len(objects)>0:
@@ -83,10 +94,27 @@ def read_and_save_data():
                         # else:
                         #     print("No objects")
                                             # Read a line from serial port
-                        position = [0,0,0]
-                        yaw = 0
-                        linear_velocity = [0,0,0]
-                        positionSetpoint = [1, 0, 1]
+                        
+                        # Use Vicon data if available, otherwise use hard-coded values
+                        if USE_VICON:
+                            position_data = mytracker.get_position(OBJECT_NAME)
+                            _, frame_no, objects = position_data
+                            if len(objects) > 0:
+                                sixdof_pose = np.array(objects[0][2:])
+                                print(f"Position: {sixdof_pose}")
+                                position = sixdof_pose[:3]
+                                yaw = sixdof_pose[5]  # Adjust based on actual orientation representation
+                            else:
+                                print("No objects")
+                                position = [0, 0, 0]
+                                yaw = 0
+                        else:
+                            # Use hard-coded values when Vicon is disabled
+                            position = [0, 0, 0]
+                            yaw = 0
+                        
+                        linear_velocity = [0, 0, 0]
+                        positionSetpoint = [0, 0, 1]
                         to_send = "{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f}\n".format(
                             position[0], position[1], position[2],
                             yaw,
